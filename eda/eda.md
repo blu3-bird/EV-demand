@@ -155,3 +155,23 @@ Tuesday             17.10
 Wednesday           17.53
 Name: DemandPerDay, dtype: float64
 ```
+
+- ### `Demand by shift`
+        - as per the data, in night there is bit high demand as compared to the day timing shift.
+
+```
+Shift       Demand
+Day         15.50
+Night       18.67
+Name: Demand, dtype: float64
+```
+
+### `count by shift `
+
+```
+Shift       Demand
+Day         28259
+Night       44567
+Name: Demand, dtype: int64
+
+```
