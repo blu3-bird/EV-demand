@@ -107,7 +107,7 @@ if page == 'Overview':
 
         st.subheader('Demand by charger company')
         by_company = df_.groupby('ChargerCompany')['Demand'].mean()
-        by_company.index = ['Company 0', 'Company 1']
+        by_company.index = [f'Company {int(c)}' for c in by_company.index]
         st.bar_chart(by_company)
 
 
