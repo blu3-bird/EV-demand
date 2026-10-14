@@ -13,7 +13,11 @@ dependencies = [
     "scikit-learn (>=1.9.1,<2.0.0)",
     "xgboost (>=3.4.1,<4.0.0)",
     "lightgbm (>=4.7.0,<5.0.0)",
-    "statsmodels (>=0.15.0,<0.16.0)"
+    "statsmodels (>=0.15.0,<0.16.0)",
+    "shap (>=0.53.0,<0.54.0)",
+    "lime (>=0.2.0.1,<0.3.0.0)",
+    "streamlit (>=1.65.0,<2.0.0)",
+    "imbalanced-learn (>=0.14.2,<0.15.0)"
 ]
 
 [tool.poetry]
