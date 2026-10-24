@@ -19,157 +19,100 @@ months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
 
 
 @st.cache_data
-def load_data():
+def load_all():
     df = pd.read_csv(project_dir.FEATURED_DIR / 'featured_dataset.csv', index_col=0)
     df['StartDay'] = pd.to_datetime(df['StartDay'])
-    return df
-
-
-## loading the pickled models and their preprocessors
-@st.cache_resource
-def load_models():
     gb = pickle.load(open(project_dir.MODEL_DIR / 'regression_gb.pkl', 'rb'))
     reg_pre = pickle.load(open(project_dir.MODEL_DIR / 'regressor_preprocessor.pkl', 'rb'))
     rf = pickle.load(open(project_dir.MODEL_DIR / 'classification_rf.pkl', 'rb'))
     clf_pre = pickle.load(open(project_dir.MODEL_DIR / 'classification_preprocessor.pkl', 'rb'))
-    return gb, reg_pre, rf, clf_pre
+    return df, gb, reg_pre, rf, clf_pre
 
 
-df = load_data()
-gb, reg_pre, rf, clf_pre = load_models()
-
-## sidebar filters
-st.sidebar.header('Filters')
+df, gb, reg_pre, rf, clf_pre = load_all()
 locations = sorted(df['Location'].unique())
-sel_location = st.sidebar.multiselect('Location', locations, default=locations)
-sel_type = st.sidebar.selectbox('Charger type', ['All', 'Type 0', 'Type 1'])
-sel_company = st.sidebar.selectbox('Charger company', ['All', 'Company 0', 'Company 1'])
-sel_shift = st.sidebar.selectbox('Shift', ['All', 'Day', 'Night'])
 
 min_date = df['StartDay'].min().date()
 max_date = df['StartDay'].max().date()
-sel_date = st.sidebar.date_input('Date range', value=(min_date, max_date),
-                                 min_value=min_date, max_value=max_date)
 
 page = st.sidebar.radio('Pages', ['Overview', 'EDA', 'Demand Prediction', 'High-Demand Prediction'])
 
 
-df_ = df[df['Location'].isin(sel_location)]
-
-if sel_type != 'All':
-    df_ = df_[df_['ChargerType'] == int(sel_type[-1])]
-
-if sel_company != 'All':
-    df_ = df_[df_['ChargerCompany'] == int(sel_company[-1])]
-
-if sel_shift != 'All':
-    df_ = df_[df_['Shift'] == sel_shift]
-
-
-if len(sel_date) == 2:
-    df_ = df_[(df_['StartDay'] >= pd.Timestamp(sel_date[0])) & (df_['StartDay'] <= pd.Timestamp(sel_date[1]))]
-
-
 if page == 'Overview':
     st.title('EV Charging Demand Prediction and Usage Pattern Analysis')
-    st.write(f'The dataset has {len(df):,} charging sessions from {min_date} to {max_date}. '
-             'Numbers below change with the sidebar filters.')
+    st.write(f'{len(df):,} charging sessions from {min_date} to {max_date}.')
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric('Sessions', f'{len(df_):,}')
-    c2.metric('Total demand', f"{df_['Demand'].sum():,.0f}" if len(df_) else '0')
-    c3.metric('Avg demand', f"{df_['Demand'].mean():.2f}" if len(df_) else '-')
-    c4.metric('Avg duration', f"{df_['Duration'].mean():.0f} min" if len(df_) else '-')
+    c1.metric('Sessions', f'{len(df):,}')
+    c2.metric('Total demand', f"{df['Demand'].sum():,.0f}")
+    c3.metric('Avg demand', f"{df['Demand'].mean():.2f}")
+    c4.metric('Avg duration', f"{df['Duration'].mean():.0f} min")
 
-    with st.expander('Show some records from the dataset'):
-        st.dataframe(df.head())
+    st.subheader('Total demand by location')
+    by_location = df.groupby('Location')['Demand'].sum().sort_values(ascending=False)
 
-    if len(df_) == 0:
-        st.write('No records for the selected filters.')
-    else:
-        st.subheader('Total demand by location')
-        by_location = df_.groupby('Location')['Demand'].sum().sort_values(ascending=False)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(by_location.index, by_location.values)
+    ax.invert_yaxis()
+    st.pyplot(fig)
+    plt.close(fig)
 
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.barh(by_location.index, by_location.values)
-        ax.invert_yaxis()
-        st.pyplot(fig)
-        plt.close(fig)
+    st.subheader('Average demand by charger type')
+    by_type = df.groupby('ChargerType')['Demand'].mean()
+    by_type.index = ['Type 0', 'Type 1']
+    st.bar_chart(by_type)
 
-        st.subheader('Average demand by charger type')
-        by_type = df_.groupby('ChargerType')['Demand'].mean()
-
-        fig, ax = plt.subplots(figsize=(7, 4))
-        ax.bar([f'Type {int(t)}' for t in by_type.index], by_type.values)
-        ax.set_title('Avg demand')
-        st.pyplot(fig)
-        plt.close(fig)
-
-        st.subheader('Demand by charger company')
-        by_company = df_.groupby('ChargerCompany')['Demand'].mean()
-        by_company.index = [f'Company {int(c)}' for c in by_company.index]
-        st.bar_chart(by_company)
+    st.subheader('Demand by charger company')
+    by_company = df.groupby('ChargerCompany')['Demand'].mean()
+    by_company.index = ['Company 0', 'Company 1']
+    st.bar_chart(by_company)
 
 
 elif page == 'EDA':
     st.title('Exploratory Data Analysis')
 
-    if len(df_) == 0:
-        st.write('No records for the selected filters.')
-    else:
-        st.subheader('Average demand by location')
-        by_location = df_.groupby('Location')['Demand'].mean().sort_values(ascending=False)
+    st.subheader('Average demand by location')
+    by_location = df.groupby('Location')['Demand'].mean().sort_values(ascending=False)
 
-        fig, ax = plt.subplots(figsize=(9, 5))
-        ax.barh(by_location.index, by_location.values)
-        ax.invert_yaxis()
-        st.pyplot(fig)
-        plt.close(fig)
-        st.write('Accommodation, bus garage and camping have the higher demand per session.')
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(by_location.index, by_location.values)
+    ax.invert_yaxis()
+    st.pyplot(fig)
+    plt.close(fig)
+    st.write('Accommodation, bus garage and camping have the higher demand per session.')
 
-        st.subheader('Total demand by month')
-        by_month = df_.groupby(df_['StartDay'].dt.month)['Demand'].sum().sort_index()
+    st.subheader('Total demand by month')
+    by_month = df.groupby(df['StartDay'].dt.month)['Demand'].sum().sort_index()
+    by_month.index = [months[int(m) - 1] for m in by_month.index]
+    st.bar_chart(by_month)
+    st.write('August and July months have the highest demand as per the data.')
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.bar([months[int(m) - 1] for m in by_month.index], by_month.values)
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-        plt.close(fig)
-        st.write('August and July months have the highest demand as per the data.')
+    st.subheader('Total demand by days of the week')
+    by_day = df.groupby('StartDayOfWeek')['Demand'].sum().reindex(days)
+    st.bar_chart(by_day)
 
-        st.subheader('Total demand by days of the week')
-        by_day = df_.groupby('StartDayOfWeek')['Demand'].sum().reindex(days)
+    st.subheader('Demand by shift')
+    by_shift = df.groupby('Shift')['Demand'].mean().reindex(['Day', 'Night'])
+    st.bar_chart(by_shift)
+    st.write('In night there is bit high demand as compared to the day timing shift.')
 
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(days, by_day.values)
-        plt.xticks(rotation=60)
-        st.pyplot(fig)
-        plt.close(fig)
+    st.subheader('Duration vs Demand')
+    sample = df.sample(n=min(3000, len(df)), random_state=42)
 
-        st.subheader('Demand by shift')
-        by_shift = df_.groupby('Shift')['Demand'].mean().reindex(['Day', 'Night'])
-        st.bar_chart(by_shift)
-        st.write('In night there is bit high demand as compared to the day timing shift.')
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.scatter(sample['Duration'], sample['Demand'], alpha=0.25, s=12)
+    ax.set_xlabel('Duration (minutes)')
+    ax.set_ylabel('Demand')
+    st.pyplot(fig)
+    plt.close(fig)
 
-        st.subheader('Duration vs Demand')
-        sample = df_.sample(n=min(3000, len(df_)), random_state=42)
-
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.scatter(sample['Duration'], sample['Demand'], alpha=0.25, s=12)
-        ax.set_xlabel('Duration (minutes)')
-        ax.set_ylabel('Demand')
-        st.pyplot(fig)
-        plt.close(fig)
-
-        st.subheader('Average duration by charger company and type')
-        st.dataframe(df_.groupby(['ChargerCompany', 'ChargerType'])['Duration'].mean().round(1))
-        st.write('Company type 1 takes more time to charge EV as per the data.')
+    st.subheader('Average duration by charger company and type')
+    st.dataframe(df.groupby(['ChargerCompany', 'ChargerType'])['Duration'].mean().round(1))
 
 
 elif page == 'Demand Prediction':
     st.title('Charging Demand Prediction')
-    st.write('Gradient boosting model from the regression notebook, it predicts the demand '
-             'of a charging session. R2 on the test data is 0.79.')
+    st.write('Gradient boosting model from the regression notebook, R2 on test data is 0.79.')
 
     with st.form('regression form'):
         col1, col2 = st.columns(2)
@@ -200,10 +143,10 @@ elif page == 'Demand Prediction':
         }])
 
         pred = gb.predict(reg_pre.transform(row))[0]
-        st.metric('Predicted demand', f'{pred:.2f}')
+        st.write('Predicted demand:', round(pred, 2))
 
     st.subheader('Model comparison')
-    ## metrics we got from the regression notebook
+    ## metrics from the regression notebook
     results = [
         {'model' : 'Linear Regression', 'R2' : 0.5679, 'MAE' : 5.6209, 'MSE' : 77.8578, 'RMSE' : 8.8237},
         {'model' : 'Decision Tree', 'R2' : 0.7555, 'MAE' : 3.5957, 'MSE' : 44.0596, 'RMSE' : 6.6377},
@@ -212,33 +155,14 @@ elif page == 'Demand Prediction':
         {'model' : 'XGBoost', 'R2' : 0.7989, 'MAE' : 3.3599, 'MSE' : 36.2402, 'RMSE' : 6.0200},
     ]
     st.dataframe(pd.DataFrame(results))
+    st.bar_chart(pd.DataFrame(results).set_index('model')['R2'])
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar([r['model'] for r in results], [r['R2'] for r in results])
-    plt.xticks(rotation=45)
-    ax.set_title('R2 score')
-    st.pyplot(fig)
-    plt.close(fig)
-
-    st.write('XGBoost has the best R2 here, we pickled the gradient boosting model for prediction.')
-
-    st.subheader('Feature importance')
-    feat_names = [n.split('__')[-1] for n in reg_pre.get_feature_names_out()]
-    importance = sorted(zip(feat_names, gb.feature_importances_), key=lambda x: x[1], reverse=True)[:10]
-    importance = importance[::-1]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.barh([f[0] for f in importance], [f[1] for f in importance])
-    st.pyplot(fig)
-    plt.close(fig)
-    st.write('Duration is the most important feature for this model.')
-
+    ## shap / lime explanations can be added here
 
 
 elif page == 'High-Demand Prediction':
     st.title('High-Demand Session Prediction')
-    st.write('Random forest from the classification notebook. Sessions above the median '
-             'demand (14.1) are taken as High Demand.')
+    st.write('Random forest from the classification notebook. Median demand (14.1) is the threshold.')
 
     with st.form('classification form'):
         col1, col2 = st.columns(2)
@@ -269,9 +193,8 @@ elif page == 'High-Demand Prediction':
         label = rf.predict(transformed)[0]
         prob = rf.predict_proba(transformed)[0][1]
 
-        pred_col, prob_col = st.columns(2)
-        pred_col.metric('Prediction', 'High Demand' if label == 1 else 'Normal Demand')
-        prob_col.metric('Probability', f'{prob:.1%}')
+        st.write('Prediction:', 'High Demand' if label == 1 else 'Normal Demand')
+        st.write('Probability of high demand:', round(prob, 2))
 
     st.subheader('Model comparison')
     ## metrics from the classification notebook
@@ -284,25 +207,6 @@ elif page == 'High-Demand Prediction':
         {'model' : 'LightGBM', 'Accuracy' : 0.8944, 'ROC-AUC' : 0.9571, 'F1' : 0.8980, 'Precision' : 0.8687, 'Recall' : 0.9293},
     ]
     st.dataframe(pd.DataFrame(results))
+    st.bar_chart(pd.DataFrame(results).set_index('model')['Accuracy'])
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar([r['model'] for r in results], [r['Accuracy'] for r in results])
-    plt.xticks(rotation=45)
-    ax.set_title('Accuracy')
-    st.pyplot(fig)
-    plt.close(fig)
-
-    st.write('Tree based models are all close to each other, random forest is slightly ahead.')
-
-    st.subheader('Feature importance')
-    feat_names = [n.split('__')[-1] for n in clf_pre.get_feature_names_out()]
-    importance = sorted(zip(feat_names, rf.feature_importances_), key=lambda x: x[1], reverse=True)[:10]
-    importance = importance[::-1]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.barh([f[0] for f in importance], [f[1] for f in importance])
-    st.pyplot(fig)
-    plt.close(fig)
-    st.write('Duration is the most important feature here as well.')
-
-
+    ## shap / lime explanations can be added here
